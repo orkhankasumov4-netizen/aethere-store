@@ -36,6 +36,11 @@ export const WishlistProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     setLoading(true);
     try {
       const token = await getToken();
+      if (!token) {
+        setWishlist([]);
+        setLoading(false);
+        return;
+      }
       const res = await fetch('/api/wishlist', {
         headers: { Authorization: `Bearer ${token}` }
       });
@@ -44,6 +49,7 @@ export const WishlistProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       setWishlist(Array.isArray(items) ? items : []);
     } catch (err) {
       console.error('Wishlist fetch error:', err);
+      setWishlist([]);
     } finally {
       setLoading(false);
     }

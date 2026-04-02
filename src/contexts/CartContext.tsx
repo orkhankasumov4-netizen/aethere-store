@@ -42,6 +42,11 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setLoading(true);
     try {
       const token = await getToken();
+      if (!token) {
+        setCart([]);
+        setLoading(false);
+        return;
+      }
       const res = await fetch('/api/cart', {
         headers: { Authorization: `Bearer ${token}` }
       });
@@ -50,6 +55,7 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setCart(Array.isArray(items) ? items : []);
     } catch (err) {
       console.error('Cart fetch error:', err);
+      setCart([]);
     } finally {
       setLoading(false);
     }

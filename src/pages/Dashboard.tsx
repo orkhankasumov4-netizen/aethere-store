@@ -1,64 +1,153 @@
 import React, { useState, useEffect } from 'react';
 import { Navbar } from '../components/Navbar';
 import { Footer } from '../components/Footer';
+import supabase from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import { useWishlist } from '../contexts/WishlistContext';
 import { useCart } from '../contexts/CartContext';
 import { useLoyaltyPoints } from '../stores/useLoyaltyPoints';
 import { useCurrency } from '../stores/useCurrency';
+import { useUI } from '../stores/useUI';
 import { Link } from 'react-router-dom';
 import { RatingStars } from '../components/RatingStars';
 import { motion } from 'framer-motion';
-import { Gift, Mail, Key, Award, TrendingUp, Clock } from 'lucide-react';
+import { Gift, Key, Award, TrendingUp, Clock, CheckCircle } from 'lucide-react';
 
 export const Dashboard: React.FC = () => {
-  const { user, signIn, signUp, signOut, signInWithGoogle } = useAuth();
+  const { user, signIn, signUp, signOut, signInWithGoogle, getToken } = useAuth();
   const { wishlist } = useWishlist();
   const { cart } = useCart();
   const { balance, history, fetchPoints } = useLoyaltyPoints();
   const { format } = useCurrency();
-  
-  const [email, setEmail] = useState('demo@aether.com');
-  const [password, setPassword] = useState('password123');
+  const { addToast } = useUI();
+
+  // Form state
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [fullName, setFullName] = useState('');
   const [isSignUp, setIsSignUp] = useState(false);
   const [loading, setLoading] = useState(false);
   const [orders, setOrders] = useState<any[]>([]);
+  
+  // Forgot password state
   const [showForgotPassword, setShowForgotPassword] = useState(false);
   const [forgotEmail, setForgotEmail] = useState('');
   const [forgotSubmitted, setForgotSubmitted] = useState(false);
 
+  // Validation errors
+  const [errors, setErrors] = useState<{ email?: string; password?: string; fullName?: string }>({});
+
+  // Fetch user data when logged in
   useEffect(() => {
     if (user) {
       // Fetch orders
-      fetch('/api/orders', { headers: { Authorization: `Bearer ${localStorage.getItem('sb-access-token') || ''}` } })
-        .then(res => res.json())
-        .then(json => {
-          const orders = Array.isArray(json) ? json : (json.data || []);
-          setOrders(Array.isArray(orders) ? orders : []);
-        });
+      fetchOrders();
       
       // Fetch loyalty points
-      fetch('/api/user?action=profile', { headers: { Authorization: `Bearer ${localStorage.getItem('sb-access-token') || ''}` } })
-        .then(res => res.json())
-        .then(data => {
-          if (data.loyalty_points !== undefined) {
-            fetchPoints(localStorage.getItem('sb-access-token') || '');
-          }
-        });
+      fetchPointsData();
+      
+      // Pre-fill email from user
+      setEmail(user.email || '');
     }
   }, [user]);
 
+  const fetchOrders = async () => {
+    try {
+      const token = await getToken();
+      if (!token) return;
+      
+      const res = await fetch('/api/orders', {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      const json = await res.json();
+      const ordersData = Array.isArray(json) ? json : (json.data || []);
+      setOrders(Array.isArray(ordersData) ? ordersData : []);
+    } catch (err) {
+      console.error('Orders fetch error:', err);
+    }
+  };
+
+  const fetchPointsData = async () => {
+    try {
+      const token = await getToken();
+      if (!token) return;
+      await fetchPoints(token);
+    } catch (err) {
+      console.error('Loyalty points fetch error:', err);
+    }
+  };
+
+  // Validation
+  const validateEmail = (email: string) => {
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    return emailRegex.test(email);
+  };
+
+  const validatePassword = (password: string) => {
+    return password.length >= 6;
+  };
+
+  const validateForm = () => {
+    const newErrors: { email?: string; password?: string; fullName?: string } = {};
+    
+    if (!email) {
+      newErrors.email = 'Email is required';
+    } else if (!validateEmail(email)) {
+      newErrors.email = 'Please enter a valid email';
+    }
+    
+    if (!password) {
+      newErrors.password = 'Password is required';
+    } else if (!validatePassword(password)) {
+      newErrors.password = 'Password must be at least 6 characters';
+    }
+    
+    if (isSignUp && !fullName) {
+      newErrors.fullName = 'Full name is required';
+    }
+    
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  };
+
   const handleAuth = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    if (!validateForm()) return;
+    
     setLoading(true);
+    setErrors({});
+    
     try {
       if (isSignUp) {
-        await signUp(email, password);
+        const { error } = await signUp(email, password, fullName);
+        if (error) {
+          if (error.message.includes('already been registered')) {
+            setErrors({ email: 'This email is already registered' });
+            addToast('Email already registered. Please sign in instead.', 'warning');
+          } else {
+            addToast(error.message, 'error');
+          }
+        } else {
+          addToast('Account created! Please check your email to verify.', 'success');
+          setIsSignUp(false);
+        }
       } else {
-        await signIn(email, password);
+        const { error } = await signIn(email, password);
+        if (error) {
+          if (error.message.includes('Invalid login credentials')) {
+            setErrors({ email: ' ', password: 'Invalid email or password' });
+            addToast('Invalid email or password', 'error');
+          } else {
+            addToast(error.message, 'error');
+          }
+        } else {
+          addToast('Welcome back!', 'success');
+        }
       }
     } catch (err: any) {
-      alert(err.message);
+      console.error('Auth error:', err);
+      addToast('An unexpected error occurred', 'error');
     } finally {
       setLoading(false);
     }
@@ -67,25 +156,66 @@ export const Dashboard: React.FC = () => {
   const handleGoogleSignIn = async () => {
     try {
       await signInWithGoogle();
+      // Supabase handles redirect
     } catch (err: any) {
-      alert(err.message);
+      console.error('Google sign-in error:', err);
+      addToast('Google sign-in failed. Please try again.', 'error');
     }
+  };
+
+  const handleSignOut = async () => {
+    await signOut();
+    addToast('Signed out successfully', 'info');
   };
 
   const handleForgotPassword = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!forgotEmail) return;
+    if (!forgotEmail || !validateEmail(forgotEmail)) {
+      setErrors({ email: 'Please enter a valid email' });
+      return;
+    }
+    
     setLoading(true);
-    // Simulate password reset email
-    await new Promise(resolve => setTimeout(resolve, 1000));
-    setForgotSubmitted(true);
-    setLoading(false);
+    setErrors({});
+    
+    try {
+      // Use Supabase password reset
+      const { error } = await supabase.auth.resetPasswordForEmail(
+        forgotEmail,
+        {
+          redirectTo: `${window.location.origin}/auth/callback#recover`,
+        }
+      );
+      
+      if (error) throw error;
+      
+      setForgotSubmitted(true);
+      addToast('Password reset link sent to your email', 'success');
+    } catch (err: any) {
+      console.error('Password reset error:', err);
+      addToast('Failed to send reset link. Please try again.', 'error');
+    } finally {
+      setLoading(false);
+    }
   };
 
-  if (!user) {
+  // Render loading state
+  if (!user && loading && !showForgotPassword) {
     return (
       <div className="min-h-screen bg-[#0A0A0A] flex items-center justify-center">
-        <div className="max-w-md w-full px-6">
+        <div className="text-center">
+          <div className="w-12 h-12 border-4 border-[#7C3AED] border-t-transparent rounded-full animate-spin mx-auto mb-4" />
+          <div className="text-gray-400">Loading...</div>
+        </div>
+      </div>
+    );
+  }
+
+  // Auth forms (not logged in)
+  if (!user) {
+    return (
+      <div className="min-h-screen bg-[#0A0A0A] flex items-center justify-center py-12 px-4">
+        <div className="max-w-md w-full">
           <div className="text-center mb-10">
             <div className="text-4xl font-medium mb-2">Welcome to AETHER</div>
             <div className="text-gray-500">Sign in to access your account</div>
@@ -94,17 +224,67 @@ export const Dashboard: React.FC = () => {
           {!showForgotPassword ? (
             <>
               <form onSubmit={handleAuth} className="space-y-4">
-                <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Email" className="w-full bg-[#141414] border border-gray-800 rounded-2xl px-5 py-4" />
-                <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Password" className="w-full bg-[#141414] border border-gray-800 rounded-2xl px-5 py-4" />
-                <button type="submit" disabled={loading} className="w-full py-4 bg-white text-black rounded-2xl font-medium">
-                  {loading ? '...' : isSignUp ? 'Create Account' : 'Sign In'}
+                {isSignUp && (
+                  <div>
+                    <input
+                      type="text"
+                      value={fullName}
+                      onChange={(e) => setFullName(e.target.value)}
+                      placeholder="Full Name"
+                      className={`w-full bg-[#141414] border ${errors.fullName ? 'border-rose-500' : 'border-gray-800'} rounded-2xl px-5 py-4 focus:border-[#7C3AED] focus:outline-none`}
+                    />
+                    {errors.fullName && <p className="text-rose-500 text-sm mt-1">{errors.fullName}</p>}
+                  </div>
+                )}
+                
+                <div>
+                  <input
+                    type="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    placeholder="Email"
+                    className={`w-full bg-[#141414] border ${errors.email ? 'border-rose-500' : 'border-gray-800'} rounded-2xl px-5 py-4 focus:border-[#7C3AED] focus:outline-none`}
+                    disabled={loading}
+                  />
+                  {errors.email && <p className="text-rose-500 text-sm mt-1">{errors.email}</p>}
+                </div>
+                
+                <div>
+                  <input
+                    type="password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    placeholder="Password"
+                    className={`w-full bg-[#141414] border ${errors.password ? 'border-rose-500' : 'border-gray-800'} rounded-2xl px-5 py-4 focus:border-[#7C3AED] focus:outline-none`}
+                    disabled={loading}
+                  />
+                  {errors.password && <p className="text-rose-500 text-sm mt-1">{errors.password}</p>}
+                </div>
+                
+                <button
+                  type="submit"
+                  disabled={loading}
+                  className="w-full py-4 bg-white text-black rounded-2xl font-medium disabled:opacity-50 disabled:cursor-not-allowed hover:bg-[#7C3AED] hover:text-white transition-colors"
+                >
+                  {loading ? 'Please wait...' : isSignUp ? 'Create Account' : 'Sign In'}
                 </button>
               </form>
 
-              {/* Google OAuth */}
+              {/* Divider */}
+              <div className="relative my-6">
+                <div className="absolute inset-0 flex items-center">
+                  <div className="w-full border-t border-gray-800"></div>
+                </div>
+                <div className="relative flex justify-center text-sm">
+                  <span className="px-4 bg-[#0A0A0A] text-gray-500">Or continue with</span>
+                </div>
+              </div>
+
+              {/* Google Sign In */}
               <button
                 onClick={handleGoogleSignIn}
-                className="mt-4 w-full py-4 bg-white text-black rounded-2xl font-medium flex items-center justify-center gap-3 hover:bg-gray-100 transition-colors"
+                disabled={loading}
+                className="w-full py-4 bg-white text-black rounded-2xl font-medium flex items-center justify-center gap-3 hover:bg-gray-100 transition-colors disabled:opacity-50"
               >
                 <svg className="w-5 h-5" viewBox="0 0 24 24">
                   <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
@@ -115,22 +295,45 @@ export const Dashboard: React.FC = () => {
                 Continue with Google
               </button>
 
-              <div className="text-center mt-4">
-                <button onClick={() => setShowForgotPassword(true)} className="text-sm text-[#7C3AED] hover:underline flex items-center justify-center gap-2 mx-auto">
-                  <Key size={14} /> Forgot Password?
-                </button>
-              </div>
+              {/* Forgot Password */}
+              {!isSignUp && (
+                <div className="text-center mt-4">
+                  <button
+                    onClick={() => setShowForgotPassword(true)}
+                    className="text-sm text-[#7C3AED] hover:underline flex items-center justify-center gap-2 mx-auto"
+                  >
+                    <Key size={14} /> Forgot Password?
+                  </button>
+                </div>
+              )}
 
-              <div className="text-center mt-4">
-                <button onClick={() => setIsSignUp(!isSignUp)} className="text-sm text-[#7C3AED]">
+              {/* Toggle Sign Up/In */}
+              <div className="text-center mt-6">
+                <button
+                  onClick={() => {
+                    setIsSignUp(!isSignUp);
+                    setErrors({});
+                  }}
+                  className="text-sm text-[#7C3AED]"
+                >
                   {isSignUp ? 'Already have an account? Sign In' : "Don't have an account? Sign Up"}
                 </button>
               </div>
 
-              <div className="text-center mt-8 text-xs text-gray-500">Demo: demo@aether.com / password123</div>
+              {/* Demo Credentials */}
+              <div className="text-center mt-8 text-xs text-gray-500 p-4 bg-[#141414] rounded-xl">
+                <div className="font-medium mb-1">Demo Credentials</div>
+                <div>Email: demo@aether.com</div>
+                <div>Password: password123</div>
+              </div>
             </>
           ) : (
-            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
+            /* Forgot Password Form */
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="bg-[#141414] rounded-3xl border border-gray-800 p-8"
+            >
               {!forgotSubmitted ? (
                 <>
                   <div className="text-center mb-6">
@@ -138,21 +341,53 @@ export const Dashboard: React.FC = () => {
                     <div className="text-sm text-gray-500">Enter your email and we'll send you a reset link</div>
                   </div>
                   <form onSubmit={handleForgotPassword} className="space-y-4">
-                    <input type="email" value={forgotEmail} onChange={(e) => setForgotEmail(e.target.value)} placeholder="your@email.com" className="w-full bg-[#141414] border border-gray-800 rounded-2xl px-5 py-4" />
-                    <button type="submit" disabled={loading} className="w-full py-4 bg-white text-black rounded-2xl font-medium">
+                    <div>
+                      <input
+                        type="email"
+                        value={forgotEmail}
+                        onChange={(e) => setForgotEmail(e.target.value)}
+                        placeholder="your@email.com"
+                        className={`w-full bg-black border ${errors.email ? 'border-rose-500' : 'border-gray-800'} rounded-2xl px-5 py-4 focus:border-[#7C3AED] focus:outline-none`}
+                        disabled={loading}
+                      />
+                      {errors.email && <p className="text-rose-500 text-sm mt-1">{errors.email}</p>}
+                    </div>
+                    <button
+                      type="submit"
+                      disabled={loading}
+                      className="w-full py-4 bg-white text-black rounded-2xl font-medium disabled:opacity-50"
+                    >
                       {loading ? 'Sending...' : 'Send Reset Link'}
                     </button>
                   </form>
-                  <button onClick={() => setShowForgotPassword(false)} className="mt-4 w-full text-sm text-gray-500">← Back to Sign In</button>
+                  <button
+                    onClick={() => {
+                      setShowForgotPassword(false);
+                      setErrors({});
+                    }}
+                    className="mt-4 w-full text-sm text-gray-500 hover:text-white"
+                  >
+                    ← Back to Sign In
+                  </button>
                 </>
               ) : (
+                /* Success Message */
                 <div className="text-center py-8">
                   <div className="w-16 h-16 bg-emerald-500/20 rounded-full flex items-center justify-center mx-auto mb-4">
-                    <Mail size={32} className="text-emerald-400" />
+                    <CheckCircle size={32} className="text-emerald-400" />
                   </div>
                   <div className="text-xl font-medium mb-2">Check Your Email</div>
-                  <div className="text-sm text-gray-400 mb-6">We've sent a password reset link to {forgotEmail}</div>
-                  <button onClick={() => setShowForgotPassword(false)} className="px-8 py-3 bg-white text-black rounded-2xl font-medium">
+                  <div className="text-sm text-gray-400 mb-6">
+                    We've sent a password reset link to <span className="text-white">{forgotEmail}</span>
+                  </div>
+                  <button
+                    onClick={() => {
+                      setShowForgotPassword(false);
+                      setForgotSubmitted(false);
+                      setForgotEmail('');
+                    }}
+                    className="px-8 py-3 bg-white text-black rounded-2xl font-medium hover:bg-[#7C3AED] hover:text-white transition-colors"
+                  >
                     Back to Sign In
                   </button>
                 </div>
@@ -164,6 +399,7 @@ export const Dashboard: React.FC = () => {
     );
   }
 
+  // Dashboard (logged in)
   return (
     <div className="min-h-screen bg-[#0A0A0A] text-white">
       <Navbar />
@@ -171,9 +407,11 @@ export const Dashboard: React.FC = () => {
         <div className="flex justify-between items-center mb-10">
           <div>
             <div className="text-sm text-[#7C3AED]">WELCOME BACK</div>
-            <div className="text-4xl font-medium tracking-tight">{user.email?.split('@')[0]}</div>
+            <div className="text-4xl font-medium tracking-tight">{user.email?.split('@')[0] || user.user_metadata?.full_name || 'User'}</div>
           </div>
-          <button onClick={signOut} className="px-6 py-2 text-sm border border-gray-800 rounded-xl hover:bg-gray-900">Sign Out</button>
+          <button onClick={handleSignOut} className="px-6 py-2 text-sm border border-gray-800 rounded-xl hover:bg-gray-900 hover:border-rose-500 hover:text-rose-500 transition-colors">
+            Sign Out
+          </button>
         </div>
 
         <div className="grid lg:grid-cols-12 gap-8">
@@ -183,10 +421,10 @@ export const Dashboard: React.FC = () => {
               <div className="text-xs text-gray-500 mb-4">ACCOUNT</div>
               <nav className="space-y-1 text-sm">
                 <div className="px-4 py-3 rounded-xl bg-white/5 text-white">Overview</div>
-                <div className="px-4 py-3 text-gray-400 hover:text-white">My Orders</div>
-                <div className="px-4 py-3 text-gray-400 hover:text-white">Wishlist ({wishlist.length})</div>
-                <div className="px-4 py-3 text-gray-400 hover:text-white">Addresses</div>
-                <div className="px-4 py-3 text-gray-400 hover:text-white">Payment Methods</div>
+                <div className="px-4 py-3 text-gray-400 hover:text-white cursor-pointer">My Orders</div>
+                <div className="px-4 py-3 text-gray-400 hover:text-white cursor-pointer">Wishlist ({wishlist.length})</div>
+                <div className="px-4 py-3 text-gray-400 hover:text-white cursor-pointer">Addresses</div>
+                <div className="px-4 py-3 text-gray-400 hover:text-white cursor-pointer">Payment Methods</div>
               </nav>
             </div>
           </div>
@@ -201,7 +439,7 @@ export const Dashboard: React.FC = () => {
                 { label: 'Cart Items', value: cart.length, icon: <Clock size={20} /> },
                 { label: 'Loyalty Points', value: balance, icon: <Award size={20} />, highlight: true },
               ].map((stat, i) => (
-                <div key={i} className={`bg-[#141414] border border-gray-800 rounded-3xl p-6 ${stat.highlight ? 'border-[#7C3AED]/50 bg-[#7C3AED]/10' : ''}`}>
+                <div key={i} className={`bg-[#141414] border ${stat.highlight ? 'border-[#7C3AED]/50 bg-[#7C3AED]/10' : 'border-gray-800'} rounded-3xl p-6`}>
                   <div className="flex items-center justify-between mb-2">
                     <div className="text-3xl font-mono">{stat.value}</div>
                     <div className={stat.highlight ? 'text-[#7C3AED]' : 'text-gray-500'}>{stat.icon}</div>
@@ -212,7 +450,7 @@ export const Dashboard: React.FC = () => {
             </div>
 
             {/* Loyalty Points History */}
-            {history.length > 0 && (
+            {history && history.length > 0 && (
               <div className="bg-[#141414] rounded-3xl border border-gray-800 p-8 mb-8">
                 <div className="flex items-center gap-2 mb-6">
                   <Award size={20} className="text-[#7C3AED]" />
@@ -238,23 +476,26 @@ export const Dashboard: React.FC = () => {
             <div className="bg-[#141414] rounded-3xl border border-gray-800 p-8 mb-8">
               <div className="flex justify-between mb-6">
                 <div className="text-xl font-medium">Recent Orders</div>
-                <Link to="/cart" className="text-sm text-[#7C3AED]">View all →</Link>
+                <Link to="/cart" className="text-sm text-[#7C3AED] hover:underline">View all →</Link>
               </div>
               {orders.length > 0 ? (
                 orders.slice(0, 3).map((order, idx) => (
                   <div key={idx} className="flex items-center justify-between py-4 border-b border-gray-800 last:border-none">
                     <div>
-                      <div className="font-mono text-sm text-gray-400">#{order.id.slice(0, 8)}</div>
+                      <div className="font-mono text-sm text-gray-400">#{order.id?.slice(0, 8) || 'N/A'}</div>
                       <div className="text-sm text-gray-400">{new Date(order.created_at).toLocaleDateString()}</div>
                     </div>
                     <div className="text-right">
                       <div className="font-medium">{format(order.total)}</div>
-                      <div className="text-xs text-emerald-400">{order.status}</div>
+                      <div className="text-xs text-emerald-400">{order.status || 'Pending'}</div>
                     </div>
                   </div>
                 ))
               ) : (
-                <div className="text-center py-12 text-gray-500">No orders yet. Start shopping!</div>
+                <div className="text-center py-12 text-gray-500">
+                  <div className="text-4xl mb-4">📦</div>
+                  <div>No orders yet. Start shopping!</div>
+                </div>
               )}
             </div>
 
@@ -262,21 +503,25 @@ export const Dashboard: React.FC = () => {
             <div className="bg-[#141414] rounded-3xl border border-gray-800 p-8">
               <div className="flex justify-between mb-6">
                 <div className="text-xl font-medium">Wishlist</div>
-                <Link to="/cart" className="text-sm text-[#7C3AED]">View all →</Link>
+                <Link to="/cart" className="text-sm text-[#7C3AED] hover:underline">View all →</Link>
               </div>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                {wishlist.slice(0, 3).map((item, idx) => (
-                  <div key={idx} className="bg-black rounded-2xl p-4 flex gap-4">
-                    <img src={item.products.image} className="w-20 h-20 object-cover rounded-xl" />
-                    <div>
-                      <div className="text-sm text-white line-clamp-2">{item.products.name}</div>
-                      <div className="text-xs text-gray-500">{item.products.brand}</div>
-                      <RatingStars rating={item.products.rating} size={12} />
+                {wishlist && wishlist.length > 0 ? (
+                  wishlist.slice(0, 3).map((item, idx) => (
+                    <div key={idx} className="bg-black rounded-2xl p-4 flex gap-4">
+                      <img src={item.products?.image} alt={item.products?.name} className="w-20 h-20 object-cover rounded-xl" />
+                      <div>
+                        <div className="text-sm text-white line-clamp-2">{item.products?.name}</div>
+                        <div className="text-xs text-gray-500">{item.products?.brand}</div>
+                        <RatingStars rating={item.products?.rating} size={12} />
+                      </div>
                     </div>
+                  ))
+                ) : (
+                  <div className="col-span-3 text-center py-8 text-gray-500">
+                    <div className="text-4xl mb-4">💝</div>
+                    <div>Your wishlist is empty</div>
                   </div>
-                ))}
-                {wishlist.length === 0 && (
-                  <div className="col-span-3 text-center py-8 text-gray-500">Your wishlist is empty</div>
                 )}
               </div>
             </div>
