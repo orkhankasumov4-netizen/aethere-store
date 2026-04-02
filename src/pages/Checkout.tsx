@@ -49,7 +49,7 @@ export const Checkout: React.FC = () => {
       return;
     }
     try {
-      const res = await fetch('/api/promo_codes', {
+      const res = await fetch('/api/engagement?action=promo', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ code: promoCode, orderTotal: total })

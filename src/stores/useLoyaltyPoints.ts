@@ -30,7 +30,7 @@ export const useLoyaltyPoints = create<LoyaltyPointsStore>((set) => ({
     set({ loading: true });
     try {
       // Fetch from user_profiles table
-      const profileRes = await fetch('/api/user_profile', {
+      const profileRes = await fetch('/api/user?action=profile', {
         headers: { Authorization: `Bearer ${token}` }
       });
       
@@ -42,7 +42,7 @@ export const useLoyaltyPoints = create<LoyaltyPointsStore>((set) => ({
       }
 
       // Fetch history
-      const historyRes = await fetch('/api/loyalty_points', {
+      const historyRes = await fetch('/api/user?action=loyalty', {
         headers: { Authorization: `Bearer ${token}` }
       });
       

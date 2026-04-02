@@ -130,7 +130,7 @@ export const ProductDetail: React.FC = () => {
       return;
     }
     try {
-      const res = await fetch('/api/stock_notifications', {
+      const res = await fetch('/api/engagement?action=stock-notification', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ product_id: product.id, email: stockNotificationEmail })

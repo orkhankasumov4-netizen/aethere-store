@@ -35,7 +35,7 @@ export const Dashboard: React.FC = () => {
         .then(data => setOrders(data || []));
       
       // Fetch loyalty points
-      fetch('/api/user_profile', { headers: { Authorization: `Bearer ${localStorage.getItem('sb-access-token') || ''}` } })
+      fetch('/api/user?action=profile', { headers: { Authorization: `Bearer ${localStorage.getItem('sb-access-token') || ''}` } })
         .then(res => res.json())
         .then(data => {
           if (data.loyalty_points !== undefined) {
