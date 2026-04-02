@@ -42,12 +42,13 @@ export const useCart = create<CartStore>((set, get) => ({
     set({ loading: true });
     try {
       const res = await fetch('/api/cart', { headers: { Authorization: `Bearer ${token}` } });
-      const data = await res.json();
-      const items = data || [];
-      const total = items.reduce((sum: number, item: CartItem) => 
+      const json = await res.json();
+      const items = Array.isArray(json) ? json : (json.data || []);
+      const safeItems = Array.isArray(items) ? items : [];
+      const total = safeItems.reduce((sum: number, item: CartItem) =>
         sum + (item.products?.price || 0) * item.quantity, 0);
-      const count = items.reduce((sum: number, item: CartItem) => sum + item.quantity, 0);
-      set({ items, total, count, loading: false });
+      const count = safeItems.reduce((sum: number, item: CartItem) => sum + item.quantity, 0);
+      set({ items: safeItems, total, count, loading: false });
     } catch {
       set({ loading: false });
     }

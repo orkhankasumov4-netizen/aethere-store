@@ -16,7 +16,10 @@ export const CategoryGrid: React.FC = () => {
   useEffect(() => {
     fetch('/api/categories')
       .then(res => res.json())
-      .then(data => setCategories(data));
+      .then(json => {
+        const cats = Array.isArray(json) ? json : (json.data || []);
+        setCategories(Array.isArray(cats) ? cats : []);
+      });
   }, []);
 
   return (

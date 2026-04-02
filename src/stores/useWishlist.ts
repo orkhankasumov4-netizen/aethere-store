@@ -33,8 +33,9 @@ export const useWishlist = create<WishlistStore>((set, get) => ({
     set({ loading: true });
     try {
       const res = await fetch('/api/wishlist', { headers: { Authorization: `Bearer ${token}` } });
-      const data = await res.json();
-      set({ items: data || [], loading: false });
+      const json = await res.json();
+      const items = Array.isArray(json) ? json : (json.data || []);
+      set({ items: Array.isArray(items) ? items : [], loading: false });
     } catch {
       set({ loading: false });
     }

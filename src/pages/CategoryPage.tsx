@@ -35,8 +35,9 @@ export const CategoryPage: React.FC = () => {
       setLoading(true);
       try {
         const res = await fetch(`/api/products?category=${encodeURIComponent(name)}`);
-        const data = await res.json();
-        setProducts(data || []);
+        const json = await res.json();
+        const products = Array.isArray(json) ? json : (json.data || []);
+        setProducts(Array.isArray(products) ? products : []);
         addToast('Products refreshed', 'success');
       } catch {
         addToast('Failed to load products', 'error');

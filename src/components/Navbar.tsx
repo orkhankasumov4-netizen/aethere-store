@@ -42,7 +42,10 @@ export const Navbar: React.FC = () => {
   React.useEffect(() => {
     fetch('/api/products?limit=20')
       .then(res => res.json())
-      .then(data => setSearchProducts(data));
+      .then(json => {
+        const products = Array.isArray(json) ? json : (json.data || []);
+        setSearchProducts(Array.isArray(products) ? products : []);
+      });
   }, []);
 
   const handleSignOut = async () => {

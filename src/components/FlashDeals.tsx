@@ -27,8 +27,9 @@ export const FlashDeals: React.FC = () => {
   useEffect(() => {
     fetch('/api/products?limit=8')
       .then(res => res.json())
-      .then(data => {
-        const deals = data.filter((p: Product) => p.discount > 0 || p.is_hot);
+      .then(json => {
+        const data = Array.isArray(json) ? json : (json.data || []);
+        const deals = Array.isArray(data) ? data.filter((p: Product) => p.discount > 0 || p.is_hot) : [];
         setProducts(deals.slice(0, 6));
       });
   }, []);

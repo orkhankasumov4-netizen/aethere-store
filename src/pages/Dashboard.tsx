@@ -32,7 +32,10 @@ export const Dashboard: React.FC = () => {
       // Fetch orders
       fetch('/api/orders', { headers: { Authorization: `Bearer ${localStorage.getItem('sb-access-token') || ''}` } })
         .then(res => res.json())
-        .then(data => setOrders(data || []));
+        .then(json => {
+          const orders = Array.isArray(json) ? json : (json.data || []);
+          setOrders(Array.isArray(orders) ? orders : []);
+        });
       
       // Fetch loyalty points
       fetch('/api/user?action=profile', { headers: { Authorization: `Bearer ${localStorage.getItem('sb-access-token') || ''}` } })

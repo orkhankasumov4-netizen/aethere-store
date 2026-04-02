@@ -45,8 +45,9 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const res = await fetch('/api/cart', {
         headers: { Authorization: `Bearer ${token}` }
       });
-      const data = await res.json();
-      setCart(data || []);
+      const json = await res.json();
+      const items = Array.isArray(json) ? json : (json.data || []);
+      setCart(Array.isArray(items) ? items : []);
     } catch (err) {
       console.error('Cart fetch error:', err);
     } finally {
@@ -120,8 +121,9 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const clearCart = () => setCart([]);
 
-  const total = cart.reduce((sum, item) => sum + item.products.price * item.quantity, 0);
-  const count = cart.reduce((sum, item) => sum + item.quantity, 0);
+  const safeCart = Array.isArray(cart) ? cart : [];
+  const total = safeCart.reduce((sum, item) => sum + item.products.price * item.quantity, 0);
+  const count = safeCart.reduce((sum, item) => sum + item.quantity, 0);
 
   return (
     <CartContext.Provider value={{ cart, loading, addToCart, updateQuantity, removeFromCart, clearCart, total, count }}>

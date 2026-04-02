@@ -38,10 +38,14 @@ export const Home: React.FC = () => {
   useEffect(() => {
     fetch('/api/products?limit=12')
       .then(res => res.json())
-      .then(data => setFeatured(data));
+      .then(json => {
+        const products = Array.isArray(json) ? json : (json.data || []);
+        setFeatured(Array.isArray(products) ? products : []);
+      });
   }, []);
 
-  const filteredProducts = featured.filter(p => {
+  const safeFeatured = Array.isArray(featured) ? featured : [];
+  const filteredProducts = safeFeatured.filter(p => {
     if (activeFilter === 'new') return p.is_new;
     if (activeFilter === 'bestsellers') return p.review_count > 200;
     if (activeFilter === 'rated') return p.rating >= 4.7;

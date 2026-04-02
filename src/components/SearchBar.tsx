@@ -31,8 +31,9 @@ export const SearchBar: React.FC = () => {
       }
       try {
         const res = await fetch(`/api/products?search=${encodeURIComponent(searchQuery)}&limit=6`);
-        const data = await res.json();
-        setResults(data || []);
+        const json = await res.json();
+        const products = Array.isArray(json) ? json : (json.data || []);
+        setResults(Array.isArray(products) ? products : []);
       } catch (err) {
         console.error('Search error:', err);
       }
