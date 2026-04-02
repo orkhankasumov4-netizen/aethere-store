@@ -1,8 +1,8 @@
 import React, { useState, memo } from 'react';
 import { motion } from 'framer-motion';
 import { Heart, ShoppingCart, Eye, Scale } from 'lucide-react';
-import { useCart } from '../contexts/CartContext';
-import { useWishlist } from '../contexts/WishlistContext';
+import { useCart } from '../stores/useCart';
+import { useWishlist } from '../stores/useWishlist';
 import { useComparison } from '../stores/useComparison';
 import { useUI } from '../stores/useUI';
 import { RatingStars } from './RatingStars';

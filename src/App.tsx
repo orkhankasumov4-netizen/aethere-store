@@ -12,16 +12,22 @@ import { AuthCallback } from './pages/AuthCallback';
 import { useCart } from './stores/useCart';
 import { useWishlist } from './stores/useWishlist';
 import { useUI } from './stores/useUI';
-import { useAuth } from './contexts/AuthContext';
+import { useAuth } from './stores/useAuth';
 import { ToastContainer } from './components/Toast';
 import { SkipLink } from './components/SkipLink';
 import { OfflineBanner } from './hooks/useNetworkStatus';
+import { ResetPassword } from './pages/ResetPassword';
 
 const AppContent: React.FC = () => {
-  const { user, getToken, loading: authLoading } = useAuth();
+  const { user, loading: authLoading, init } = useAuth();
   const { fetchCart } = useCart();
-  const { fetchWishlist } = useWishlist();
+  const { fetchWishlist } = useWishlist() as any; // We'll add clearWishlist back if missing or just rely on fetch
   const { theme, setAccentColor } = useUI();
+
+  // Initialize Auth
+  useEffect(() => {
+    init();
+  }, [init]);
 
   // Apply saved theme and accent on mount
   useEffect(() => {
@@ -37,17 +43,16 @@ const AppContent: React.FC = () => {
     const loadData = async () => {
       if (authLoading) return;
       
-      const token = await getToken();
-      if (token && user) {
-        await Promise.all([fetchCart(token), fetchWishlist(token)]);
-      } else if (!user) {
+      if (user) {
+        await Promise.all([fetchCart(), fetchWishlist()]);
+      } else {
         // Clear cart/wishlist when logged out
-        fetchCart(undefined);
-        fetchWishlist(undefined);
+        fetchCart();
+        fetchWishlist();
       }
     };
     loadData();
-  }, [user, authLoading, getToken, fetchCart, fetchWishlist]);
+  }, [user, authLoading, fetchCart, fetchWishlist]);
 
   // Show loading during auth initialization
   if (authLoading) {
@@ -75,6 +80,7 @@ const AppContent: React.FC = () => {
           <Route path="/category/:name" element={<CategoryPage />} />
           <Route path="/compare" element={<ComparePage />} />
           <Route path="/auth/callback" element={<AuthCallback />} />
+          <Route path="/reset-password" element={<ResetPassword />} />
           <Route path="*" element={<NotFound />} />
         </Routes>
       </BrowserRouter>

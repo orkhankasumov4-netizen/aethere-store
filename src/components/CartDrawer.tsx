@@ -1,7 +1,7 @@
 import React from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, Plus, Minus, Trash2 } from 'lucide-react';
-import { useCart } from '../contexts/CartContext';
+import { useCart } from '../stores/useCart';
 import { useNavigate } from 'react-router-dom';
 import { PriceDisplay } from './PriceDisplay';
 

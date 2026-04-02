@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Navbar } from '../components/Navbar';
 import { Footer } from '../components/Footer';
-import { useCart } from '../contexts/CartContext';
+import { useCart } from '../stores/useCart';
 import { useCurrency } from '../stores/useCurrency';
 import { useUI } from '../stores/useUI';
 import { PriceDisplay } from '../components/PriceDisplay';

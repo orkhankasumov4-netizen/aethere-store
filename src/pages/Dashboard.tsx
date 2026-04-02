@@ -2,13 +2,13 @@ import React, { useState, useEffect } from 'react';
 import { Navbar } from '../components/Navbar';
 import { Footer } from '../components/Footer';
 import supabase from '../lib/supabase';
-import { useAuth } from '../contexts/AuthContext';
-import { useWishlist } from '../contexts/WishlistContext';
-import { useCart } from '../contexts/CartContext';
+import { useAuth } from '../stores/useAuth';
+import { useWishlist } from '../stores/useWishlist';
+import { useCart } from '../stores/useCart';
 import { useLoyaltyPoints } from '../stores/useLoyaltyPoints';
 import { useCurrency } from '../stores/useCurrency';
 import { useUI } from '../stores/useUI';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams, useNavigate } from 'react-router-dom';
 import { RatingStars } from '../components/RatingStars';
 import { motion } from 'framer-motion';
 import { Gift, Key, Award, TrendingUp, Clock, CheckCircle } from 'lucide-react';
@@ -20,6 +20,8 @@ export const Dashboard: React.FC = () => {
   const { balance, history, fetchPoints } = useLoyaltyPoints();
   const { format } = useCurrency();
   const { addToast } = useUI();
+  const [searchParams] = useSearchParams();
+  const navigate = useNavigate();
 
   // Form state
   const [email, setEmail] = useState('');
@@ -143,6 +145,8 @@ export const Dashboard: React.FC = () => {
           }
         } else {
           addToast('Welcome back!', 'success');
+          const redirect = searchParams.get('redirect');
+          if (redirect) navigate(redirect);
         }
       }
     } catch (err: any) {
@@ -513,7 +517,7 @@ export const Dashboard: React.FC = () => {
                       <div>
                         <div className="text-sm text-white line-clamp-2">{item.products?.name}</div>
                         <div className="text-xs text-gray-500">{item.products?.brand}</div>
-                        <RatingStars rating={item.products?.rating} size={12} />
+                        <RatingStars rating={item.products?.rating || 5} size={12} />
                       </div>
                     </div>
                   ))

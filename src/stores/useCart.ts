@@ -1,12 +1,13 @@
 import { create } from 'zustand';
+import { useAuth } from './useAuth';
 
-interface CartItem {
-  id: string;
+export interface CartItem {
+  id: string; // some places use number, assuming string for parity with unified approach
   product_id: string;
   quantity: number;
-  selected_color?: string;
-  selected_size?: string;
-  products?: {
+  color?: string;
+  size?: string;
+  products: {
     id: string;
     name: string;
     price: number;
@@ -17,26 +18,27 @@ interface CartItem {
 }
 
 interface CartStore {
-  items: CartItem[];
+  cart: CartItem[];
   loading: boolean;
   total: number;
   count: number;
-  fetchCart: (token?: string) => Promise<void>;
-  addItem: (productId: string, quantity: number, color?: string, size?: string, token?: string) => Promise<void>;
-  updateQuantity: (id: string, quantity: number, token?: string) => Promise<void>;
-  removeItem: (id: string, token?: string) => Promise<void>;
+  fetchCart: () => Promise<void>;
+  addToCart: (productId: string | number, quantity: number, color?: string, size?: string) => Promise<void>;
+  updateQuantity: (id: string | number, quantity: number) => Promise<void>;
+  removeFromCart: (id: string | number) => Promise<void>;
   clearCart: () => void;
 }
 
 export const useCart = create<CartStore>((set, get) => ({
-  items: [],
+  cart: [],
   loading: false,
   total: 0,
   count: 0,
 
-  fetchCart: async (token) => {
+  fetchCart: async () => {
+    const token = await useAuth.getState().getToken();
     if (!token) {
-      set({ items: [], total: 0, count: 0 });
+      set({ cart: [], total: 0, count: 0 });
       return;
     }
     set({ loading: true });
@@ -45,17 +47,23 @@ export const useCart = create<CartStore>((set, get) => ({
       const json = await res.json();
       const items = Array.isArray(json) ? json : (json.data || []);
       const safeItems = Array.isArray(items) ? items : [];
+      
       const total = safeItems.reduce((sum: number, item: CartItem) =>
         sum + (item.products?.price || 0) * item.quantity, 0);
       const count = safeItems.reduce((sum: number, item: CartItem) => sum + item.quantity, 0);
-      set({ items: safeItems, total, count, loading: false });
+      
+      set({ cart: safeItems, total, count, loading: false });
     } catch {
-      set({ loading: false });
+      set({ cart: [], total: 0, count: 0, loading: false });
     }
   },
 
-  addItem: async (productId, quantity, color, size, token) => {
-    if (!token) return;
+  addToCart: async (productId, quantity, color = '', size = '') => {
+    const token = await useAuth.getState().getToken();
+    if (!token) {
+      // Could throw or alert contextually, returning early for now.
+      return;
+    }
     set({ loading: true });
     try {
       const res = await fetch('/api/cart', {
@@ -63,20 +71,27 @@ export const useCart = create<CartStore>((set, get) => ({
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({ product_id: productId, quantity, color, size })
       });
-      if (res.ok) await get().fetchCart(token);
-    } catch {}
+      if (res.ok) {
+        await get().fetchCart();
+      }
+    } catch (e) {
+      console.error('addToCart error:', e);
+    }
     set({ loading: false });
   },
 
-  updateQuantity: async (id, quantity, token) => {
+  updateQuantity: async (id, quantity) => {
+    const token = await useAuth.getState().getToken();
     if (!token) return;
-    const items = get().items.map(item => 
-      item.id === id ? { ...item, quantity } : item
+
+    // Optimistic update
+    const items = get().cart.map(item => 
+      String(item.id) === String(id) ? { ...item, quantity } : item
     );
     const total = items.reduce((sum, item) => 
       sum + (item.products?.price || 0) * item.quantity, 0);
     const count = items.reduce((sum, item) => sum + item.quantity, 0);
-    set({ items, total, count });
+    set({ cart: items, total, count });
     
     try {
       await fetch('/api/cart', {
@@ -84,16 +99,23 @@ export const useCart = create<CartStore>((set, get) => ({
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({ id, quantity })
       });
-    } catch {}
+    } catch (e) {
+      console.error('updateQuantity error', e);
+      // Optional: rollback on error by fetching cart again
+      await get().fetchCart();
+    }
   },
 
-  removeItem: async (id, token) => {
+  removeFromCart: async (id) => {
+    const token = await useAuth.getState().getToken();
     if (!token) return;
-    const items = get().items.filter(item => item.id !== id);
+
+    // Optimistic update
+    const items = get().cart.filter(item => String(item.id) !== String(id));
     const total = items.reduce((sum, item) => 
       sum + (item.products?.price || 0) * item.quantity, 0);
     const count = items.reduce((sum, item) => sum + item.quantity, 0);
-    set({ items, total, count });
+    set({ cart: items, total, count });
     
     try {
       await fetch('/api/cart', {
@@ -101,8 +123,11 @@ export const useCart = create<CartStore>((set, get) => ({
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({ id })
       });
-    } catch {}
+    } catch (e) {
+      console.error('removeFromCart error', e);
+      await get().fetchCart();
+    }
   },
 
-  clearCart: () => set({ items: [], total: 0, count: 0 })
+  clearCart: () => set({ cart: [], total: 0, count: 0 })
 }));

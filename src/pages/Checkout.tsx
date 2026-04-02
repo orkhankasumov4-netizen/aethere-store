@@ -2,14 +2,15 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Navbar } from '../components/Navbar';
 import { Footer } from '../components/Footer';
-import { useCart } from '../contexts/CartContext';
-import { useAuth } from '../contexts/AuthContext';
+import { useCart } from '../stores/useCart';
+import { useAuth } from '../stores/useAuth';
 import { useUI } from '../stores/useUI';
 import { useCurrency } from '../stores/useCurrency';
 import { useLoyaltyPoints, calculateOrderPoints } from '../stores/useLoyaltyPoints';
 import { motion } from 'framer-motion';
 import confetti from 'canvas-confetti';
 import { Gift, Tag, CheckCircle } from 'lucide-react';
+import { useEffect } from 'react';
 
 export const Checkout: React.FC = () => {
   const [step, setStep] = useState(1);
@@ -21,11 +22,19 @@ export const Checkout: React.FC = () => {
   const [giftMessage, setGiftMessage] = useState('');
   
   const { cart, total, clearCart } = useCart();
-  const { user, getToken } = useAuth();
+  const { user, getToken, loading: authLoading, initialized } = useAuth();
   const { addToast } = useUI();
   const { format } = useCurrency();
   const { addPoints } = useLoyaltyPoints();
   const navigate = useNavigate();
+
+  // Route Protection
+  useEffect(() => {
+    if (initialized && !authLoading && !user) {
+      addToast('Please sign in to complete checkout', 'warning');
+      navigate('/dashboard?redirect=/checkout');
+    }
+  }, [user, authLoading, initialized, navigate, addToast]);
 
   const [formData, setFormData] = useState({
     fullName: user?.email?.split('@')[0] || '',
@@ -210,8 +219,8 @@ export const Checkout: React.FC = () => {
               <div className="space-y-4 mb-6 max-h-48 overflow-y-auto">
                 {cart.map((item, i) => (
                   <div key={i} className="flex justify-between text-sm">
-                    <div>{item.products.name} × {item.quantity}</div>
-                    <div className="font-mono">{format(item.products.price * item.quantity)}</div>
+                    <div>{item.products?.name || 'Item'} × {item.quantity}</div>
+                    <div className="font-mono">{format((item.products?.price || 0) * item.quantity)}</div>
                   </div>
                 ))}
               </div>

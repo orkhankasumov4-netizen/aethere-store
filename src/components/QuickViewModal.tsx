@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, ShoppingCart, Heart } from 'lucide-react';
-import { useCart } from '../contexts/CartContext';
-import { useWishlist } from '../contexts/WishlistContext';
+import { useCart } from '../stores/useCart';
+import { useWishlist } from '../stores/useWishlist';
 import { RatingStars } from './RatingStars';
 import { PriceDisplay } from './PriceDisplay';
 import { QuantitySelector } from './QuantitySelector';

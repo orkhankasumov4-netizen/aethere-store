@@ -12,8 +12,9 @@ export const AuthCallback: React.FC = () => {
   useEffect(() => {
     const processCallback = async () => {
       try {
-        // Check for error params from Supabase
-        const errorDescription = searchParams.get('error_description');
+        // Check for error params from Supabase (can be in search or hash)
+        const hashParams = new URLSearchParams(window.location.hash.substring(1));
+        const errorDescription = searchParams.get('error_description') || hashParams.get('error_description');
         if (errorDescription) {
           throw new Error(errorDescription);
         }
@@ -43,8 +44,13 @@ export const AuthCallback: React.FC = () => {
             console.error('Profile creation error:', err);
           }
 
-          // Redirect to dashboard or home
-          navigate('/dashboard');
+          // Redirect to dashboard, home or reset password
+          const isRecovery = hashParams.get('type') === 'recovery';
+          if (isRecovery) {
+            navigate('/reset-password');
+          } else {
+            navigate('/dashboard');
+          }
         } else {
           throw new Error('No session received');
         }
